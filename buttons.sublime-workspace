@@ -1,0 +1,463 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"sa",
+				"sav_button.h"
+			],
+			[
+				"Mot",
+				"motorOn"
+			],
+			[
+				"M",
+				"MotorMQ.h"
+			],
+			[
+				"p",
+				"println"
+			],
+			[
+				"tem",
+				"temp_icon"
+			],
+			[
+				"mo",
+				"Month"
+			],
+			[
+				"data",
+				"data-src"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"contents": "#ifndef SavButton_h\n#define SavButton_h\n#include \"Arduino.h\"\n\n//#define DEBUG_SERIAL 1\n\ntypedef enum {\n   SB_NONE = 0,\n   SB_CLICK,\n   SB_AUTO_CLICK,\n   SB_LONG_CLICK,\n}SBUTTON_CLICK;\n\n\nclass SButton {\n  private :\n     uint8_t  Pin;\n     bool     State;\n     bool     Long_press_state;\n     bool     Auto_press_state;\n     uint32_t Ms1;\n     uint32_t Ms2;\n     uint32_t Ms_auto_click;\n     uint16_t TM_bounce;\n     uint16_t TM_long_click;\n     uint16_t TM_auto_click;\n     uint16_t Period_auto_click;\n  public :\n     SButton(uint8_t pin,uint16_t tm1 = 50, uint16_t tm2 = 0, uint16_t tm3 = 0, uint16_t tm4 = 500);\n     void begin();\n     SBUTTON_CLICK Loop();\n};     \n\n\n#endif\n",
+			"file": "/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/sav_button.h",
+			"file_size": 711,
+			"file_write_time": 131060530475316007,
+			"settings":
+			{
+				"buffer_size": 676,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"contents": "#include \"sav_button.h\"\n\n/**\n * Конструктор класса кнопки\n * Кнопка это цифровой пин подтянутый к питанию и замыкаемый на землю\n * Событие срабатывания происходит по нажатию кнопки (возвращается 1)\n * и отпусканию кнопки (возвращается время нажатия кнопки, мсек)\n * tm1 - таймаут дребезга контактов. По умолчанию 50мс\n * tm2 - время длинного нажатия клавиши. По умолчанию 2000мс\n * tm3 - врямы перевода кнопки в генерацию серии нажатий. По умолсанию отключено\n * tm4 - время между кликами в серии. По умолчанию 500 мс. Если tm3 = 0 то не работает\n */\nSButton::SButton(uint8_t pin,uint16_t tm1, uint16_t tm2,uint16_t tm3, uint16_t tm4){\n   Pin               = pin;\n   State             = false;\n   Long_press_state  = false;\n   Auto_press_state  = false;\n   Ms1               = 0;\n   Ms2               = 0;\n   Ms_auto_click     = 0;\n   TM_bounce         = tm1;\n   TM_long_click     = tm2;\n   TM_auto_click     = tm3;\n   Period_auto_click = tm4;\n}\n\n/**\n * Инициализация кнопки\n */\nvoid SButton::begin() {\n   pinMode(Pin, INPUT_PULLUP);\n#ifdef DEBUG_SERIAL      \n   Serial.print(\"Init button pin \");\n   Serial.println(Pin);\n#endif      \n}\n\n/**\n * Действие производимое в цикле или по таймеру\n * возвращает SB_NONE если кнопка не нажата и событие нажатие или динного нажатия кнопки\n*/\nSBUTTON_CLICK SButton::Loop() {\n   uint32_t ms = millis();\n   bool pin_state = digitalRead(Pin);\n// Фиксируем нажатие кнопки \n   if( pin_state == LOW && State == false && (ms-Ms1)>TM_bounce ){\n       uint16_t dt = ms - Ms1;\n       Long_press_state = false;\n       Auto_press_state = false;\n#ifdef DEBUG_SERIAL      \n       Serial.print(\">>>Event button, pin=\");\n       Serial.print(Pin);\n       Serial.print(\",press ON, tm=\");\n       Serial.print(dt);\n       Serial.println(\" ms\");\n#endif      \n       State = true;\n       Ms2    = ms;\n       if( TM_long_click == 0 && TM_auto_click == 0 )return SB_CLICK;\n   }\n\n// Фиксируем длинное нажатие кнопки   \n   if( pin_state == LOW && !Long_press_state && TM_long_click>0 && ( ms - Ms2 )>TM_long_click ){\n      uint16_t dt      = ms - Ms2;\n      Long_press_state = true;\n#ifdef DEBUG_SERIAL      \n      Serial.print(\">>>Event button, pin=\");\n      Serial.print(Pin);\n      Serial.print(\",long press, tm=\");\n      Serial.print(dt);\n      Serial.println(\" ms\");\n#endif \n      return SB_LONG_CLICK;\n   }\n\n// Фиксируем авто нажатие кнопки   \n   if( pin_state == LOW && TM_auto_click > 0 \n       && ( ms - Ms2 ) > TM_auto_click \n       && ( ms - Ms_auto_click ) > Period_auto_click ){\n      uint16_t dt      = ms - Ms2;\n      Auto_press_state = true;\n      Ms_auto_click    = ms;\n#ifdef DEBUG_SERIAL      \n      Serial.print(\">>>Event button, pin=\");\n      Serial.print(Pin);\n      Serial.print(\",auto press, tm=\");\n      Serial.print(dt);\n      Serial.println(\" ms\");\n#endif \n      return SB_AUTO_CLICK;\n   }\n\n   \n// Фиксируем отпускание кнопки \n   if( pin_state == HIGH && State == true  && (ms-Ms2)>TM_bounce ){\n       uint16_t dt      = ms - Ms2;\n// Сбрасываем все флаги       \n       State            = false;\n#ifdef DEBUG_SERIAL      \n       Serial.print(\">>>Event button, pin=\");\n       Serial.print(Pin);\n       Serial.print(\",press OFF, tm=\");\n       Serial.print(dt);\n       Serial.println(\" ms\");\n#endif \n      Ms1    = ms;\n// Возвращаем короткий клик      \n      if( (TM_long_click != 0 || TM_auto_click != 0) && !Long_press_state && !Auto_press_state )return SB_CLICK;\n       \n   }\n\n\n   return SB_NONE;\n}     \n\n",
+			"file": "/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/sav_button.cpp",
+			"file_size": 4199,
+			"file_write_time": 131060541792379859,
+			"settings":
+			{
+				"buffer_size": 3443,
+				"line_ending": "Windows"
+			}
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 392.0,
+		"last_filter": "Package Control: ",
+		"selected_items":
+		[
+			[
+				"Package Control: ",
+				"Package Control: Install Package"
+			]
+		],
+		"width": 464.0
+	},
+	"console":
+	{
+		"height": 153.0,
+		"history":
+		[
+			"import urllib.request,os,hashlib; h = '7183a2d3e96f11eeadd761d777e62404' + 'e330c659d4bb41d3bdf022e94cab3cd0'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by)",
+			"git clone git://github.com/thinkpixellab/flatland.git \"Theme - Flatland\"",
+			"import urllib.request,os,hashlib; h = '2915d1851351e5ee549c20394736b442' + '8bc59f460fa1548d1514676163dafc88'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by)"
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/C/Users/stepanov-avl/Documents/Arduino/libraries",
+		"/C/Users/stepanov-avl/Documents/Arduino/libraries/ButtonsTest"
+	],
+	"file_history":
+	[
+		"/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/motormq.ino",
+		"/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/TimerOne.cpp",
+		"/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/TimerOne.h",
+		"/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/sav_button.cpp",
+		"/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/sav_button.h",
+		"/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/fuse.c",
+		"/C/Users/stepanov-avl/Documents/Downloads/CMS/2015/OctoberCMS/alecspb/clientsmanager/lang/ru/lang.php",
+		"/C/Users/stepanov-avl/Documents/Downloads/CMS/2015/OctoberCMS/alecspb/clientsmanager/controllers/clients/fields.yaml",
+		"/C/Users/stepanov-avl/Documents/Downloads/Sublime Text 3 Build 3083 portable/Data/Packages/Default/Default (Windows).sublime-keymap",
+		"/C/Users/stepanov-avl/Documents/Downloads/Sublime Text 3 Build 3083 portable/Data/Packages/User/Default (Windows).sublime-keymap",
+		"/C/OpenServer/domains/october.local/themes/boottheme/layouts/default.htm",
+		"/C/OpenServer/domains/october.local/themes/boottheme/composer.json",
+		"/C/OpenServer/domains/october.local/themes/boottheme/theme.yaml",
+		"/C/OpenServer/Projects/alecspb/clientsmanager/controllers/Projects.php",
+		"/C/Users/Александр/Documents/Sublime Text 3 Build 3083 portable/Data/Packages/User/Preferences.sublime-settings",
+		"/C/Users/Александр/Documents/Sublime Text 3 Build 3083 portable/Data/Packages/Default/Preferences.sublime-settings",
+		"/C/xampp/sendmail/sendmail.php",
+		"/C/xampp/phpMyAdmin/config.inc.php",
+		"/C/xampp/phpMyAdmin/config.sample.inc.php",
+		"/C/Users/Александр/Documents/Sublime Text 3 Build 3083 portable/Data/Packages/User/Default (Windows).sublime-keymap",
+		"/C/Users/Александр/Documents/Sublime Text 3 Build 3083 portable/Data/Packages/FTPSync/FTPSync.sublime-settings",
+		"/C/Users/Александр/Documents/Sublime Text 3 Build 3083 portable/Data/Packages/User/FTPSync.sublime-settings"
+	],
+	"find":
+	{
+		"height": 34.0
+	},
+	"find_in_files":
+	{
+		"height": 93.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"termometru",
+			"picatura",
+			"luni",
+			"Time",
+			"loader",
+			"loading__line",
+			"loadTop",
+			"location"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+			"url("
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": false
+	},
+	"groups":
+	[
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/sav_button.h",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 676,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								169,
+								169
+							]
+						],
+						"settings":
+						{
+							"BracketHighlighterBusy": false,
+							"bh_regions":
+							[
+								"bh_angle",
+								"bh_angle_center",
+								"bh_angle_open",
+								"bh_angle_close",
+								"bh_angle_content",
+								"bh_round",
+								"bh_round_center",
+								"bh_round_open",
+								"bh_round_close",
+								"bh_round_content",
+								"bh_regex",
+								"bh_regex_center",
+								"bh_regex_open",
+								"bh_regex_close",
+								"bh_regex_content",
+								"bh_default",
+								"bh_default_center",
+								"bh_default_open",
+								"bh_default_close",
+								"bh_default_content",
+								"bh_single_quote",
+								"bh_single_quote_center",
+								"bh_single_quote_open",
+								"bh_single_quote_close",
+								"bh_single_quote_content",
+								"bh_tag",
+								"bh_tag_center",
+								"bh_tag_open",
+								"bh_tag_close",
+								"bh_tag_content",
+								"bh_double_quote",
+								"bh_double_quote_center",
+								"bh_double_quote_open",
+								"bh_double_quote_close",
+								"bh_double_quote_content",
+								"bh_curly",
+								"bh_curly_center",
+								"bh_curly_open",
+								"bh_curly_close",
+								"bh_curly_content",
+								"bh_square",
+								"bh_square_center",
+								"bh_square_open",
+								"bh_square_close",
+								"bh_square_content",
+								"bh_c_define",
+								"bh_c_define_center",
+								"bh_c_define_open",
+								"bh_c_define_close",
+								"bh_c_define_content",
+								"bh_unmatched",
+								"bh_unmatched_center",
+								"bh_unmatched_open",
+								"bh_unmatched_close",
+								"bh_unmatched_content"
+							],
+							"bs_sintax": "c++",
+							"buffer_scroll_name": "7b2073ff",
+							"spell_check": false,
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "/C/Users/stepanov-avl/Documents/Arduino/libraries/MotorMQ/sav_button.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 3443,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								546,
+								263
+							]
+						],
+						"settings":
+						{
+							"BracketHighlighterBusy": false,
+							"bh_regions":
+							[
+								"bh_angle",
+								"bh_angle_center",
+								"bh_angle_open",
+								"bh_angle_close",
+								"bh_angle_content",
+								"bh_round",
+								"bh_round_center",
+								"bh_round_open",
+								"bh_round_close",
+								"bh_round_content",
+								"bh_regex",
+								"bh_regex_center",
+								"bh_regex_open",
+								"bh_regex_close",
+								"bh_regex_content",
+								"bh_default",
+								"bh_default_center",
+								"bh_default_open",
+								"bh_default_close",
+								"bh_default_content",
+								"bh_single_quote",
+								"bh_single_quote_center",
+								"bh_single_quote_open",
+								"bh_single_quote_close",
+								"bh_single_quote_content",
+								"bh_tag",
+								"bh_tag_center",
+								"bh_tag_open",
+								"bh_tag_close",
+								"bh_tag_content",
+								"bh_double_quote",
+								"bh_double_quote_center",
+								"bh_double_quote_open",
+								"bh_double_quote_close",
+								"bh_double_quote_content",
+								"bh_curly",
+								"bh_curly_center",
+								"bh_curly_open",
+								"bh_curly_close",
+								"bh_curly_content",
+								"bh_square",
+								"bh_square_center",
+								"bh_square_open",
+								"bh_square_close",
+								"bh_square_content",
+								"bh_c_define",
+								"bh_c_define_center",
+								"bh_c_define_open",
+								"bh_c_define_close",
+								"bh_c_define_content",
+								"bh_unmatched",
+								"bh_unmatched_center",
+								"bh_unmatched_open",
+								"bh_unmatched_close",
+								"bh_unmatched_content"
+							],
+							"bs_sintax": "c++",
+							"buffer_scroll_name": "211b74ea",
+							"spell_check": false,
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				}
+			]
+		},
+		{
+			"sheets":
+			[
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 21.0
+	},
+	"input":
+	{
+		"height": 31.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			],
+			[
+				1,
+				0,
+				2,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			0.919871794872,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.MotorMQ":
+	{
+		"height": 100.0
+	},
+	"output.exec":
+	{
+		"height": 106.0
+	},
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "",
+	"project": "buttons.sublime-project",
+	"replace":
+	{
+		"height": 38.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 380.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": false,
+	"show_open_files": true,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 225.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+		"max_columns": 3
+	}
+}
